@@ -11,6 +11,7 @@ pub enum TokenKind {
     Minus,
     Star,
     Slash,
+    Equal,
 
     LeftParen,
     RightParen,
