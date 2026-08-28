@@ -28,7 +28,7 @@ impl Lexer {
         self.skip_whitespace();
         match self.current_char() {
             Some(ch) if ch.is_ascii_digit() => self.read_integer(),
-
+            Some(ch) if ch.is_ascii_alphabetic() || ch == '_' => self.read_identifier_or_keyword(),
             Some('+') => {
                 self.advance();
                 TokenKind::Plus
@@ -64,10 +64,10 @@ impl Lexer {
                 TokenKind::RightParen
             }
 
-            None => TokenKind::EOF,
+            None => TokenKind::Eof,
             _ => {
                 self.advance();
-                TokenKind::EOF
+                TokenKind::Eof
             }
         }
     }
@@ -83,6 +83,23 @@ impl Lexer {
 
         let number = value.parse::<i64>().unwrap();
         TokenKind::Integer(number)
+    }
+    fn read_identifier_or_keyword(&mut self) -> TokenKind {
+        let mut value = String::new();
+
+        while let Some(ch) = self.current_char() {
+            if !(ch.is_ascii_alphanumeric() || ch == '_') {
+                break;
+            }
+
+            value.push(ch);
+            self.advance();
+        }
+
+        match value.as_str() {
+            "let" => TokenKind::Let,
+            _ => TokenKind::Identifier(value),
+        }
     }
 }
 
@@ -112,7 +129,7 @@ fn skips_whitespace() {
     let mut lexer = Lexer::new("   42  ");
 
     assert_eq!(lexer.next_token(), TokenKind::Integer(42));
-    assert_eq!(lexer.next_token(), TokenKind::EOF);
+    assert_eq!(lexer.next_token(), TokenKind::Eof);
 }
 #[test]
 fn lexes_operators() {
@@ -126,7 +143,7 @@ fn lexes_operators() {
     assert_eq!(lexer.next_token(), TokenKind::Semicolon);
     assert_eq!(lexer.next_token(), TokenKind::LeftParen);
     assert_eq!(lexer.next_token(), TokenKind::RightParen);
-    assert_eq!(lexer.next_token(), TokenKind::EOF);
+    assert_eq!(lexer.next_token(), TokenKind::Eof);
 }
 #[test]
 fn lexes_arithmetic_expression() {
@@ -138,5 +155,54 @@ fn lexes_arithmetic_expression() {
     assert_eq!(lexer.next_token(), TokenKind::Star);
     assert_eq!(lexer.next_token(), TokenKind::Integer(3));
     assert_eq!(lexer.next_token(), TokenKind::Semicolon);
-    assert_eq!(lexer.next_token(), TokenKind::EOF);
+    assert_eq!(lexer.next_token(), TokenKind::Eof);
+}
+#[test]
+fn lexes_identifier() {
+    let mut lexer = Lexer::new("hello");
+
+    assert_eq!(
+        lexer.next_token(),
+        TokenKind::Identifier("hello".to_string())
+    );
+
+    assert_eq!(lexer.next_token(), TokenKind::Eof);
+}
+#[test]
+fn lexes_identifier_with_number() {
+    let mut lexer = Lexer::new("student123");
+
+    assert_eq!(
+        lexer.next_token(),
+        TokenKind::Identifier("student123".to_string())
+    );
+}
+#[test]
+fn lexes_identifier_with_underscore() {
+    let mut lexer = Lexer::new("student_name");
+
+    assert_eq!(
+        lexer.next_token(),
+        TokenKind::Identifier("student_name".to_string())
+    );
+}
+#[test]
+fn lexes_let_keyword() {
+    let mut lexer = Lexer::new("let");
+
+    assert_eq!(lexer.next_token(), TokenKind::Let);
+    assert_eq!(lexer.next_token(), TokenKind::Eof);
+}
+#[test]
+fn lexes_variable_declaration() {
+    let mut lexer = Lexer::new("let age = 22;");
+
+    assert_eq!(lexer.next_token(), TokenKind::Let);
+
+    assert_eq!(lexer.next_token(), TokenKind::Identifier("age".to_string()));
+
+    assert_eq!(lexer.next_token(), TokenKind::Equal);
+    assert_eq!(lexer.next_token(), TokenKind::Integer(22));
+    assert_eq!(lexer.next_token(), TokenKind::Semicolon);
+    assert_eq!(lexer.next_token(), TokenKind::Eof);
 }

@@ -18,7 +18,7 @@ pub enum TokenKind {
 
     Semicolon,
 
-    EOF,
+    Eof,
 }
 #[cfg(test)]
 mod tests {
