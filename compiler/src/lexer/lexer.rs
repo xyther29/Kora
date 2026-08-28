@@ -27,8 +27,9 @@ impl Lexer {
     pub fn next_token(&mut self) -> TokenKind {
         self.skip_whitespace();
         match self.current_char() {
-            Some(ch) if ch.is_ascii_digit() => self.read_integer(),
+            Some(ch) if ch.is_ascii_digit() => self.read_number(),
             Some(ch) if ch.is_ascii_alphabetic() || ch == '_' => self.read_identifier_or_keyword(),
+            Some('"') => self.read_string(),
             Some('+') => {
                 self.advance();
                 TokenKind::Plus
@@ -71,18 +72,29 @@ impl Lexer {
             }
         }
     }
-    fn read_integer(&mut self) -> TokenKind {
+    fn read_number(&mut self) -> TokenKind {
         let mut value = String::new();
+        let mut has_decimal = false;
+
         while let Some(ch) = self.current_char() {
-            if !ch.is_ascii_digit() {
+            if ch.is_ascii_digit() {
+                value.push(ch);
+                self.advance();
+            } else if ch == '.' && !has_decimal {
+                has_decimal = true;
+                value.push(ch);
+                self.advance();
+            } else {
                 break;
             }
-            value.push(ch);
-            self.advance();
         }
-
-        let number = value.parse::<i64>().unwrap();
-        TokenKind::Integer(number)
+        if has_decimal {
+            let number = value.parse::<f64>().unwrap();
+            TokenKind::Float(number)
+        } else {
+            let number = value.parse::<i64>().unwrap();
+            TokenKind::Integer(number)
+        }
     }
     fn read_identifier_or_keyword(&mut self) -> TokenKind {
         let mut value = String::new();
@@ -100,6 +112,19 @@ impl Lexer {
             "let" => TokenKind::Let,
             _ => TokenKind::Identifier(value),
         }
+    }
+    fn read_string(&mut self) -> TokenKind {
+        self.advance();
+        let mut value = String::new();
+        while let Some(ch) = self.current_char() {
+            if ch == '"' {
+                self.advance();
+                break;
+            }
+            value.push(ch);
+            self.advance();
+        }
+        TokenKind::String(value)
     }
 }
 
@@ -204,5 +229,27 @@ fn lexes_variable_declaration() {
     assert_eq!(lexer.next_token(), TokenKind::Equal);
     assert_eq!(lexer.next_token(), TokenKind::Integer(22));
     assert_eq!(lexer.next_token(), TokenKind::Semicolon);
+    assert_eq!(lexer.next_token(), TokenKind::Eof);
+}
+#[test]
+fn lexes_float() {
+    let mut lexer = Lexer::new("12.112");
+
+    assert_eq!(lexer.next_token(), TokenKind::Float(12.112));
+    assert_eq!(lexer.next_token(), TokenKind::Eof);
+}
+#[test]
+fn lexes_integer_and_float() {
+    let mut lexer = Lexer::new("10 23.3");
+
+    assert_eq!(lexer.next_token(), TokenKind::Integer(10));
+    assert_eq!(lexer.next_token(), TokenKind::Float(23.3));
+}
+#[test]
+fn lexes_string() {
+    let mut lexer = Lexer::new("\"Kora\"");
+
+    assert_eq!(lexer.next_token(), TokenKind::String("Kora".to_string()));
+
     assert_eq!(lexer.next_token(), TokenKind::Eof);
 }
