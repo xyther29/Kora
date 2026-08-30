@@ -74,22 +74,41 @@ impl Parser {
         };
 
         self.expect_token(&TokenKind::Equal)?;
-        let value = match self.current_token() {
-            Some(TokenKind::Integer(value)) => {
-                let value = *value;
-                self.advance();
-                Expression::Integer(value)
-            }
-            Some(token) => {
-                return Err(ParserError::UnexpectedToken {
-                    expected: "Expression".to_string(),
-                    found: token.clone(),
-                });
-            }
-            None => return Err(ParserError::UnexpectedEndOfInput),
-        };
+
+        let value = self.parse_expression()?;
+
         self.expect_token(&TokenKind::Semicolon)?;
+
         Ok(Statement::Let { name, value })
+    }
+    fn parse_expression(&mut self) -> Result<Expression, ParserError> {
+        match self.current_token() {
+            Some(TokenKind::Integer(value)) => {
+                let expression = Expression::Integer(*value);
+                self.advance();
+                Ok(expression)
+            }
+            Some(TokenKind::Float(value)) => {
+                let expression = Expression::Float(*value);
+                self.advance();
+                Ok(expression)
+            }
+            Some(TokenKind::String(value)) => {
+                let expression = Expression::String(value.clone());
+                self.advance();
+                Ok(expression)
+            }
+            Some(TokenKind::Identifier(name)) => {
+                let expression = Expression::Identifier(name.clone());
+                self.advance();
+                Ok(expression)
+            }
+            Some(token) => Err(ParserError::UnexpectedToken {
+                expected: "expression".to_string(),
+                found: token.clone(),
+            }),
+            None => Err(ParserError::UnexpectedEndOfInput),
+        }
     }
 }
 #[cfg(test)]
@@ -218,5 +237,61 @@ fn parses_let_statement() {
             name: "age".to_string(),
             value: Expression::Integer(22),
         }
+    );
+}
+#[test]
+fn parses_integer_expression() {
+    let tokens = vec![TokenKind::Integer(22)];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(parser.parse_expression(), Ok(Expression::Integer(22)));
+}
+#[test]
+fn parses_float_expression() {
+    let tokens = vec![TokenKind::Float(12.13)];
+    let mut parser = Parser::new(tokens);
+    assert_eq!(parser.parse_expression(), Ok(Expression::Float(12.13)));
+}
+#[test]
+fn parses_string_expression() {
+    let tokens = vec![TokenKind::String("hello".to_string())];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_expression(),
+        Ok(Expression::String("hello".to_string()))
+    );
+}
+#[test]
+fn parses_identifier_expression() {
+    let tokens = vec![TokenKind::Identifier("age".to_string())];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_expression(),
+        Ok(Expression::Identifier("age".to_string()))
+    );
+}
+#[test]
+fn parses_let_with_float() {
+    let tokens = vec![
+        TokenKind::Let,
+        TokenKind::Identifier("decimal".to_string()),
+        TokenKind::Equal,
+        TokenKind::Float(12.12),
+        TokenKind::Semicolon,
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_let_statement(),
+        Ok(Statement::Let {
+            name: "decimal".to_string(),
+            value: Expression::Float(12.12),
+        })
     );
 }
