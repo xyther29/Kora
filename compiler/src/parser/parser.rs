@@ -1,4 +1,4 @@
-use crate::ast::{Expression, Statement};
+use crate::ast::{Expression, Program, Statement};
 use crate::lexer::TokenKind;
 
 #[derive(Debug, PartialEq)]
@@ -109,6 +109,17 @@ impl Parser {
             }),
             None => Err(ParserError::UnexpectedEndOfInput),
         }
+    }
+    pub fn parse_program(&mut self) -> Result<Program, ParserError> {
+        let mut statements = Vec::new();
+        while self.current_token().is_some() {
+            if self.current_token() == Some(&TokenKind::Eof) {
+                break;
+            }
+            let statement = self.parse_statement()?;
+            statements.push(statement);
+        }
+        Ok(Program { statements })
     }
 }
 #[cfg(test)]
@@ -294,4 +305,48 @@ fn parses_let_with_float() {
             value: Expression::Float(12.12),
         })
     );
+}
+#[test]
+fn parses_multiple_let_statements() {
+    let tokens = vec![
+        TokenKind::Let,
+        TokenKind::Identifier("age".to_string()),
+        TokenKind::Equal,
+        TokenKind::Integer(22),
+        TokenKind::Semicolon,
+        TokenKind::Let,
+        TokenKind::Identifier("name".to_string()),
+        TokenKind::Equal,
+        TokenKind::String("Hritik".to_string()),
+        TokenKind::Semicolon,
+        TokenKind::Eof,
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    let program = parser.parse_program().unwrap();
+
+    assert_eq!(
+        program,
+        Program {
+            statements: vec![
+                Statement::Let {
+                    name: "age".to_string(),
+                    value: Expression::Integer(22),
+                },
+                Statement::Let {
+                    name: "name".to_string(),
+                    value: Expression::String("Hritik".to_string()),
+                },
+            ],
+        }
+    );
+}
+#[test]
+fn parses_empty_program() {
+    let tokens = vec![TokenKind::Eof];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(parser.parse_program(), Ok(Program { statements: vec![] }));
 }
