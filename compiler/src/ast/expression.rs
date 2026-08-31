@@ -14,6 +14,7 @@ pub enum Expression {
 #[derive(Debug, PartialEq)]
 pub enum BinaryOperator {
     Add,
+    Subtract,
 }
 #[cfg(test)]
 mod tests {
@@ -63,4 +64,20 @@ mod tests {
             }
         );
     }
+}
+#[test]
+fn creates_binary_subtract_expression() {
+    let expression = Expression::Binary {
+        left: Box::new(Expression::Integer(22)),
+        operator: BinaryOperator::Subtract,
+        right: Box::new(Expression::Integer(10)),
+    };
+    assert_eq!(
+        expression,
+        Expression::Binary {
+            left: Box::new(Expression::Integer(22)),
+            operator: BinaryOperator::Subtract,
+            right: Box::new(Expression::Integer(10)),
+        }
+    );
 }

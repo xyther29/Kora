@@ -115,18 +115,25 @@ impl Parser {
             None => return Err(ParserError::UnexpectedEndOfInput),
         };
 
-        if self.current_token() == Some(&TokenKind::Plus) {
+        if let Some(token) = self.current_token() {
+            let operator = if *token == TokenKind::Plus {
+                BinaryOperator::Add
+            } else if *token == TokenKind::Minus {
+                BinaryOperator::Subtract
+            } else {
+                return Ok(left);
+            };
+
             self.advance();
 
             let right = self.parse_expression()?;
 
             return Ok(Expression::Binary {
                 left: Box::new(left),
-                operator: BinaryOperator::Add,
+                operator,
                 right: Box::new(right),
             });
         }
-
         Ok(left)
     }
     pub fn parse_program(&mut self) -> Result<Program, ParserError> {
@@ -585,6 +592,25 @@ fn parses_addition_expression() {
         Ok(Expression::Binary {
             left: Box::new(Expression::Integer(22)),
             operator: BinaryOperator::Add,
+            right: Box::new(Expression::Integer(10)),
+        })
+    );
+}
+#[test]
+fn parses_subtraction_expression() {
+    let tokens = vec![
+        TokenKind::Integer(22),
+        TokenKind::Minus,
+        TokenKind::Integer(10),
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_expression(),
+        Ok(Expression::Binary {
+            left: Box::new(Expression::Integer(22)),
+            operator: BinaryOperator::Subtract,
             right: Box::new(Expression::Integer(10)),
         })
     );
