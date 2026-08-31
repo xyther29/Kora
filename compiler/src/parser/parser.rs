@@ -1,6 +1,5 @@
-use crate::ast::{Expression, Program, Statement};
+use crate::ast::{BinaryOperator, Expression, Program, Statement};
 use crate::lexer::TokenKind;
-
 #[derive(Debug, PartialEq)]
 pub enum ParserError {
     UnexpectedToken { expected: String, found: TokenKind },
@@ -86,33 +85,49 @@ impl Parser {
         Ok(Statement::Let { name, value })
     }
     fn parse_expression(&mut self) -> Result<Expression, ParserError> {
-        match self.current_token() {
+        let left = match self.current_token() {
             Some(TokenKind::Integer(value)) => {
                 let expression = Expression::Integer(*value);
                 self.advance();
-                Ok(expression)
+                expression
             }
             Some(TokenKind::Float(value)) => {
                 let expression = Expression::Float(*value);
                 self.advance();
-                Ok(expression)
+                expression
             }
             Some(TokenKind::String(value)) => {
                 let expression = Expression::String(value.clone());
                 self.advance();
-                Ok(expression)
+                expression
             }
             Some(TokenKind::Identifier(name)) => {
                 let expression = Expression::Identifier(name.clone());
                 self.advance();
-                Ok(expression)
+                expression
             }
-            Some(token) => Err(ParserError::UnexpectedToken {
-                expected: "expression".to_string(),
-                found: token.clone(),
-            }),
-            None => Err(ParserError::UnexpectedEndOfInput),
+            Some(token) => {
+                return Err(ParserError::UnexpectedToken {
+                    expected: "expression".to_string(),
+                    found: token.clone(),
+                });
+            }
+            None => return Err(ParserError::UnexpectedEndOfInput),
+        };
+
+        if self.current_token() == Some(&TokenKind::Plus) {
+            self.advance();
+
+            let right = self.parse_expression()?;
+
+            return Ok(Expression::Binary {
+                left: Box::new(left),
+                operator: BinaryOperator::Add,
+                right: Box::new(right),
+            });
         }
+
+        Ok(left)
     }
     pub fn parse_program(&mut self) -> Result<Program, ParserError> {
         let mut statements = Vec::new();
@@ -553,5 +568,24 @@ fn parses_program_with_multiple_statement_types() {
                 },
             ],
         }
+    );
+}
+#[test]
+fn parses_addition_expression() {
+    let tokens = vec![
+        TokenKind::Integer(22),
+        TokenKind::Plus,
+        TokenKind::Integer(10),
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_expression(),
+        Ok(Expression::Binary {
+            left: Box::new(Expression::Integer(22)),
+            operator: BinaryOperator::Add,
+            right: Box::new(Expression::Integer(10)),
+        })
     );
 }

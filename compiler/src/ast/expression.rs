@@ -4,8 +4,17 @@ pub enum Expression {
     Float(f64),
     String(String),
     Identifier(String),
+    Binary {
+        left: Box<Expression>,
+        operator: BinaryOperator,
+        right: Box<Expression>,
+    },
 }
 
+#[derive(Debug, PartialEq)]
+pub enum BinaryOperator {
+    Add,
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -36,5 +45,22 @@ mod tests {
         let expression = Expression::Identifier("age".to_string());
 
         assert_eq!(expression, Expression::Identifier("age".to_string()));
+    }
+    #[test]
+    fn creates_binary_add_expression() {
+        let expression = Expression::Binary {
+            left: Box::new(Expression::Integer(22)),
+            operator: BinaryOperator::Add,
+            right: Box::new(Expression::Integer(10)),
+        };
+
+        assert_eq!(
+            expression,
+            Expression::Binary {
+                left: Box::new(Expression::Integer(22)),
+                operator: BinaryOperator::Add,
+                right: Box::new(Expression::Integer(10)),
+            }
+        );
     }
 }
