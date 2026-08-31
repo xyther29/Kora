@@ -48,12 +48,16 @@ impl Parser {
     pub fn parse_statement(&mut self) -> Result<Statement, ParserError> {
         match self.current_token() {
             Some(TokenKind::Let) => self.parse_let_statement(),
-            Some(token) => Err(ParserError::UnexpectedToken {
-                expected: "statement".to_string(),
-                found: token.clone(),
-            }),
+            Some(_) => self.parse_expression_statement(),
             None => Err(ParserError::UnexpectedEndOfInput),
         }
+    }
+    fn parse_expression_statement(&mut self) -> Result<Statement, ParserError> {
+        let expression = self.parse_expression()?;
+
+        self.expect_token(&TokenKind::Semicolon)?;
+
+        Ok(Statement::Expression(expression))
     }
     fn parse_let_statement(&mut self) -> Result<Statement, ParserError> {
         self.expect_token(&TokenKind::Let)?;
@@ -349,4 +353,205 @@ fn parses_empty_program() {
     let mut parser = Parser::new(tokens);
 
     assert_eq!(parser.parse_program(), Ok(Program { statements: vec![] }));
+}
+#[test]
+fn rejects_wrong_let_keyword() {
+    let tokens = vec![
+        TokenKind::Identifier("letx".to_string()),
+        TokenKind::Identifier("age".to_string()),
+        TokenKind::Equal,
+        TokenKind::Integer(22),
+        TokenKind::Semicolon,
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert!(parser.parse_statement().is_err());
+}
+
+#[test]
+fn rejects_missing_identifier() {
+    let tokens = vec![
+        TokenKind::Let,
+        TokenKind::Equal,
+        TokenKind::Integer(22),
+        TokenKind::Semicolon,
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert!(parser.parse_statement().is_err());
+}
+
+#[test]
+fn rejects_invalid_identifier_token() {
+    let tokens = vec![
+        TokenKind::Let,
+        TokenKind::Integer(123),
+        TokenKind::Equal,
+        TokenKind::Integer(22),
+        TokenKind::Semicolon,
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert!(parser.parse_statement().is_err());
+}
+
+#[test]
+fn rejects_missing_equal_sign() {
+    let tokens = vec![
+        TokenKind::Let,
+        TokenKind::Identifier("age".to_string()),
+        TokenKind::Integer(22),
+        TokenKind::Semicolon,
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert!(parser.parse_statement().is_err());
+}
+
+#[test]
+fn rejects_invalid_expression_value() {
+    let tokens = vec![
+        TokenKind::Let,
+        TokenKind::Identifier("age".to_string()),
+        TokenKind::Equal,
+        TokenKind::Plus,
+        TokenKind::Semicolon,
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert!(parser.parse_statement().is_err());
+}
+
+#[test]
+fn rejects_missing_semicolon() {
+    let tokens = vec![
+        TokenKind::Let,
+        TokenKind::Identifier("age".to_string()),
+        TokenKind::Equal,
+        TokenKind::Integer(22),
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert!(parser.parse_statement().is_err());
+}
+#[test]
+fn parses_expression_statement() {
+    let tokens = vec![
+        TokenKind::Identifier("age".to_string()),
+        TokenKind::Semicolon,
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_statement(),
+        Ok(Statement::Expression(Expression::Identifier(
+            "age".to_string()
+        )))
+    );
+}
+#[test]
+fn parses_integer_expression_statement() {
+    let tokens = vec![TokenKind::Integer(22), TokenKind::Semicolon];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_statement(),
+        Ok(Statement::Expression(Expression::Integer(22)))
+    );
+}
+
+#[test]
+fn parses_float_expression_statement() {
+    let tokens = vec![TokenKind::Float(12.5), TokenKind::Semicolon];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_statement(),
+        Ok(Statement::Expression(Expression::Float(12.5)))
+    );
+}
+
+#[test]
+fn parses_string_expression_statement() {
+    let tokens = vec![TokenKind::String("hello".to_string()), TokenKind::Semicolon];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_statement(),
+        Ok(Statement::Expression(Expression::String(
+            "hello".to_string()
+        )))
+    );
+}
+
+#[test]
+fn parses_identifier_expression_statement() {
+    let tokens = vec![
+        TokenKind::Identifier("age".to_string()),
+        TokenKind::Semicolon,
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_statement(),
+        Ok(Statement::Expression(Expression::Identifier(
+            "age".to_string()
+        )))
+    );
+}
+#[test]
+fn parses_program_with_multiple_statement_types() {
+    let tokens = vec![
+        TokenKind::Let,
+        TokenKind::Identifier("age".to_string()),
+        TokenKind::Equal,
+        TokenKind::Integer(22),
+        TokenKind::Semicolon,
+        TokenKind::Identifier("age".to_string()),
+        TokenKind::Semicolon,
+        TokenKind::Float(12.5),
+        TokenKind::Semicolon,
+        TokenKind::String("hello".to_string()),
+        TokenKind::Semicolon,
+        TokenKind::Let,
+        TokenKind::Identifier("name".to_string()),
+        TokenKind::Equal,
+        TokenKind::Integer(12),
+        TokenKind::Semicolon,
+        TokenKind::Eof,
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    let program = parser.parse_program().unwrap();
+
+    assert_eq!(
+        program,
+        Program {
+            statements: vec![
+                Statement::Let {
+                    name: "age".to_string(),
+                    value: Expression::Integer(22),
+                },
+                Statement::Expression(Expression::Identifier("age".to_string())),
+                Statement::Expression(Expression::Float(12.5)),
+                Statement::Expression(Expression::String("hello".to_string())),
+                Statement::Let {
+                    name: "name".to_string(),
+                    value: Expression::Integer(12),
+                },
+            ],
+        }
+    );
 }
