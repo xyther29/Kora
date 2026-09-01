@@ -85,55 +85,93 @@ impl Parser {
         Ok(Statement::Let { name, value })
     }
     fn parse_expression(&mut self) -> Result<Expression, ParserError> {
-        let left = match self.current_token() {
+        self.parse_additive()
+    }
+    fn parse_primary(&mut self) -> Result<Expression, ParserError> {
+        match self.current_token() {
             Some(TokenKind::Integer(value)) => {
                 let expression = Expression::Integer(*value);
                 self.advance();
-                expression
+                Ok(expression)
             }
+
             Some(TokenKind::Float(value)) => {
                 let expression = Expression::Float(*value);
                 self.advance();
-                expression
+                Ok(expression)
             }
+
             Some(TokenKind::String(value)) => {
                 let expression = Expression::String(value.clone());
                 self.advance();
-                expression
+                Ok(expression)
             }
+
             Some(TokenKind::Identifier(name)) => {
                 let expression = Expression::Identifier(name.clone());
                 self.advance();
-                expression
+                Ok(expression)
             }
-            Some(token) => {
-                return Err(ParserError::UnexpectedToken {
-                    expected: "expression".to_string(),
-                    found: token.clone(),
-                });
-            }
-            None => return Err(ParserError::UnexpectedEndOfInput),
-        };
+            Some(TokenKind::LeftParen) => {
+                self.advance();
 
-        if let Some(token) = self.current_token() {
-            let operator = if *token == TokenKind::Plus {
-                BinaryOperator::Add
-            } else if *token == TokenKind::Minus {
-                BinaryOperator::Subtract
-            } else {
-                return Ok(left);
+                let expression = self.parse_expression();
+                self.expect_token(&TokenKind::RightParen)?;
+                Ok(expression?)
+            }
+
+            Some(token) => Err(ParserError::UnexpectedToken {
+                expected: "expression".to_string(),
+                found: token.clone(),
+            }),
+
+            None => Err(ParserError::UnexpectedEndOfInput),
+        }
+    }
+    fn parse_multiplicative(&mut self) -> Result<Expression, ParserError> {
+        let mut left = self.parse_primary()?;
+
+        loop {
+            let operator = match self.current_token() {
+                Some(TokenKind::Star) => BinaryOperator::Multiply,
+                Some(TokenKind::Slash) => BinaryOperator::Divide,
+                _ => break,
             };
 
             self.advance();
 
-            let right = self.parse_expression()?;
+            let right = self.parse_primary()?;
 
-            return Ok(Expression::Binary {
+            left = Expression::Binary {
                 left: Box::new(left),
                 operator,
                 right: Box::new(right),
-            });
+            };
         }
+
+        Ok(left)
+    }
+    fn parse_additive(&mut self) -> Result<Expression, ParserError> {
+        let mut left = self.parse_multiplicative()?;
+
+        loop {
+            let operator = match self.current_token() {
+                Some(TokenKind::Plus) => BinaryOperator::Add,
+                Some(TokenKind::Minus) => BinaryOperator::Subtract,
+                _ => break,
+            };
+
+            self.advance();
+
+            let right = self.parse_multiplicative()?;
+
+            left = Expression::Binary {
+                left: Box::new(left),
+                operator,
+                right: Box::new(right),
+            };
+        }
+
         Ok(left)
     }
     pub fn parse_program(&mut self) -> Result<Program, ParserError> {
@@ -612,6 +650,407 @@ fn parses_subtraction_expression() {
             left: Box::new(Expression::Integer(22)),
             operator: BinaryOperator::Subtract,
             right: Box::new(Expression::Integer(10)),
+        })
+    );
+}
+#[test]
+fn parses_multiplication_expression() {
+    let tokens = vec![
+        TokenKind::Integer(22),
+        TokenKind::Star,
+        TokenKind::Integer(10),
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_expression(),
+        Ok(Expression::Binary {
+            left: Box::new(Expression::Integer(22)),
+            operator: BinaryOperator::Multiply,
+            right: Box::new(Expression::Integer(10)),
+        })
+    );
+}
+#[test]
+fn parses_divide_expression() {
+    let tokens = vec![
+        TokenKind::Integer(22),
+        TokenKind::Slash,
+        TokenKind::Integer(10),
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_expression(),
+        Ok(Expression::Binary {
+            left: Box::new(Expression::Integer(22)),
+            operator: BinaryOperator::Divide,
+            right: Box::new(Expression::Integer(10)),
+        })
+    );
+}
+#[test]
+fn parses_multiple_binary_operations() {
+    let tokens = vec![
+        TokenKind::Integer(22),
+        TokenKind::Plus,
+        TokenKind::Integer(10),
+        TokenKind::Minus,
+        TokenKind::Integer(5),
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_expression(),
+        Ok(Expression::Binary {
+            left: Box::new(Expression::Binary {
+                left: Box::new(Expression::Integer(22)),
+                operator: BinaryOperator::Add,
+                right: Box::new(Expression::Integer(10)),
+            }),
+            operator: BinaryOperator::Subtract,
+            right: Box::new(Expression::Integer(5)),
+        })
+    );
+}
+#[test]
+fn parses_primary_integer() {
+    let tokens = vec![TokenKind::Integer(42)];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(parser.parse_primary(), Ok(Expression::Integer(42)));
+}
+#[test]
+fn parses_division_expression() {
+    let tokens = vec![
+        TokenKind::Integer(22),
+        TokenKind::Slash,
+        TokenKind::Integer(10),
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_expression(),
+        Ok(Expression::Binary {
+            left: Box::new(Expression::Integer(22)),
+            operator: BinaryOperator::Divide,
+            right: Box::new(Expression::Integer(10)),
+        })
+    );
+}
+#[test]
+fn parses_multiple_multiplicative_operations() {
+    let tokens = vec![
+        TokenKind::Integer(22),
+        TokenKind::Star,
+        TokenKind::Integer(10),
+        TokenKind::Slash,
+        TokenKind::Integer(2),
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_expression(),
+        Ok(Expression::Binary {
+            left: Box::new(Expression::Binary {
+                left: Box::new(Expression::Integer(22)),
+                operator: BinaryOperator::Multiply,
+                right: Box::new(Expression::Integer(10)),
+            }),
+            operator: BinaryOperator::Divide,
+            right: Box::new(Expression::Integer(2)),
+        })
+    );
+}
+#[test]
+fn parses_addition_with_multiplication_precedence() {
+    let tokens = vec![
+        TokenKind::Integer(22),
+        TokenKind::Plus,
+        TokenKind::Integer(10),
+        TokenKind::Star,
+        TokenKind::Integer(5),
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_expression(),
+        Ok(Expression::Binary {
+            left: Box::new(Expression::Integer(22)),
+            operator: BinaryOperator::Add,
+            right: Box::new(Expression::Binary {
+                left: Box::new(Expression::Integer(10)),
+                operator: BinaryOperator::Multiply,
+                right: Box::new(Expression::Integer(5)),
+            }),
+        })
+    );
+}
+#[test]
+fn parses_multiplication_with_addition_precedence() {
+    let tokens = vec![
+        TokenKind::Integer(22),
+        TokenKind::Star,
+        TokenKind::Integer(10),
+        TokenKind::Plus,
+        TokenKind::Integer(5),
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_expression(),
+        Ok(Expression::Binary {
+            left: Box::new(Expression::Binary {
+                left: Box::new(Expression::Integer(22)),
+                operator: BinaryOperator::Multiply,
+                right: Box::new(Expression::Integer(10)),
+            }),
+            operator: BinaryOperator::Add,
+            right: Box::new(Expression::Integer(5)),
+        })
+    );
+}
+#[test]
+fn parses_mixed_precedence_expression() {
+    let tokens = vec![
+        TokenKind::Integer(22),
+        TokenKind::Plus,
+        TokenKind::Integer(10),
+        TokenKind::Star,
+        TokenKind::Integer(5),
+        TokenKind::Minus,
+        TokenKind::Integer(8),
+        TokenKind::Slash,
+        TokenKind::Integer(2),
+        TokenKind::Plus,
+        TokenKind::Integer(3),
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_expression(),
+        Ok(Expression::Binary {
+            left: Box::new(Expression::Binary {
+                left: Box::new(Expression::Binary {
+                    left: Box::new(Expression::Integer(22)),
+                    operator: BinaryOperator::Add,
+                    right: Box::new(Expression::Binary {
+                        left: Box::new(Expression::Integer(10)),
+                        operator: BinaryOperator::Multiply,
+                        right: Box::new(Expression::Integer(5)),
+                    }),
+                }),
+                operator: BinaryOperator::Subtract,
+                right: Box::new(Expression::Binary {
+                    left: Box::new(Expression::Integer(8)),
+                    operator: BinaryOperator::Divide,
+                    right: Box::new(Expression::Integer(2)),
+                }),
+            }),
+            operator: BinaryOperator::Add,
+            right: Box::new(Expression::Integer(3)),
+        })
+    );
+}
+#[test]
+fn parses_parenthesized_expression() {
+    let tokens = vec![
+        TokenKind::LeftParen,
+        TokenKind::Integer(22),
+        TokenKind::Plus,
+        TokenKind::Integer(10),
+        TokenKind::RightParen,
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_expression(),
+        Ok(Expression::Binary {
+            left: Box::new(Expression::Integer(22)),
+            operator: BinaryOperator::Add,
+            right: Box::new(Expression::Integer(10)),
+        })
+    );
+}
+#[test]
+fn parses_parentheses_overriding_precedence() {
+    let tokens = vec![
+        TokenKind::LeftParen,
+        TokenKind::Integer(2),
+        TokenKind::Plus,
+        TokenKind::Integer(3),
+        TokenKind::RightParen,
+        TokenKind::Star,
+        TokenKind::Integer(4),
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_expression(),
+        Ok(Expression::Binary {
+            left: Box::new(Expression::Binary {
+                left: Box::new(Expression::Integer(2)),
+                operator: BinaryOperator::Add,
+                right: Box::new(Expression::Integer(3)),
+            }),
+            operator: BinaryOperator::Multiply,
+            right: Box::new(Expression::Integer(4)),
+        })
+    );
+}
+#[test]
+fn parses_multiplication_with_parenthesized_addition() {
+    let tokens = vec![
+        TokenKind::Integer(2),
+        TokenKind::Star,
+        TokenKind::LeftParen,
+        TokenKind::Integer(3),
+        TokenKind::Plus,
+        TokenKind::Integer(4),
+        TokenKind::RightParen,
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_expression(),
+        Ok(Expression::Binary {
+            left: Box::new(Expression::Integer(2)),
+            operator: BinaryOperator::Multiply,
+            right: Box::new(Expression::Binary {
+                left: Box::new(Expression::Integer(3)),
+                operator: BinaryOperator::Add,
+                right: Box::new(Expression::Integer(4)),
+            }),
+        })
+    );
+}
+#[test]
+fn parses_nested_parentheses() {
+    let tokens = vec![
+        TokenKind::LeftParen,
+        TokenKind::LeftParen,
+        TokenKind::Integer(2),
+        TokenKind::Plus,
+        TokenKind::Integer(3),
+        TokenKind::RightParen,
+        TokenKind::Star,
+        TokenKind::Integer(4),
+        TokenKind::RightParen,
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_expression(),
+        Ok(Expression::Binary {
+            left: Box::new(Expression::Binary {
+                left: Box::new(Expression::Integer(2)),
+                operator: BinaryOperator::Add,
+                right: Box::new(Expression::Integer(3)),
+            }),
+            operator: BinaryOperator::Multiply,
+            right: Box::new(Expression::Integer(4)),
+        })
+    );
+}
+#[test]
+fn parses_parenthesized_identifier() {
+    let tokens = vec![
+        TokenKind::LeftParen,
+        TokenKind::Identifier("age".to_string()),
+        TokenKind::RightParen,
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_expression(),
+        Ok(Expression::Identifier("age".to_string()))
+    );
+}
+#[test]
+fn parses_parenthesized_float() {
+    let tokens = vec![
+        TokenKind::LeftParen,
+        TokenKind::Float(12.5),
+        TokenKind::RightParen,
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(parser.parse_expression(), Ok(Expression::Float(12.5)));
+}
+#[test]
+fn rejects_missing_closing_parenthesis() {
+    let tokens = vec![
+        TokenKind::LeftParen,
+        TokenKind::Integer(22),
+        TokenKind::Plus,
+        TokenKind::Integer(10),
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert!(parser.parse_expression().is_err());
+}
+#[test]
+fn rejects_unexpected_closing_parenthesis() {
+    let tokens = vec![TokenKind::Integer(22), TokenKind::RightParen];
+
+    let mut parser = Parser::new(tokens);
+
+    assert!(parser.parse_statement().is_err());
+}
+#[test]
+fn rejects_empty_parentheses() {
+    let tokens = vec![TokenKind::LeftParen, TokenKind::RightParen];
+
+    let mut parser = Parser::new(tokens);
+
+    assert!(parser.parse_expression().is_err());
+}
+#[test]
+fn parses_complex_parenthesized_expression() {
+    let tokens = vec![
+        TokenKind::Integer(2),
+        TokenKind::Plus,
+        TokenKind::LeftParen,
+        TokenKind::Integer(3),
+        TokenKind::Star,
+        TokenKind::Integer(4),
+        TokenKind::RightParen,
+        TokenKind::Minus,
+        TokenKind::Integer(5),
+    ];
+
+    let mut parser = Parser::new(tokens);
+
+    assert_eq!(
+        parser.parse_expression(),
+        Ok(Expression::Binary {
+            left: Box::new(Expression::Binary {
+                left: Box::new(Expression::Integer(2)),
+                operator: BinaryOperator::Add,
+                right: Box::new(Expression::Binary {
+                    left: Box::new(Expression::Integer(3)),
+                    operator: BinaryOperator::Multiply,
+                    right: Box::new(Expression::Integer(4)),
+                }),
+            }),
+            operator: BinaryOperator::Subtract,
+            right: Box::new(Expression::Integer(5)),
         })
     );
 }

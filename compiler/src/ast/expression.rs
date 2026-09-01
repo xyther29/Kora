@@ -15,6 +15,8 @@ pub enum Expression {
 pub enum BinaryOperator {
     Add,
     Subtract,
+    Multiply,
+    Divide,
 }
 #[cfg(test)]
 mod tests {
@@ -78,6 +80,38 @@ fn creates_binary_subtract_expression() {
             left: Box::new(Expression::Integer(22)),
             operator: BinaryOperator::Subtract,
             right: Box::new(Expression::Integer(10)),
+        }
+    );
+}
+#[test]
+fn creates_binary_multiply_expression() {
+    let expression = Expression::Binary {
+        left: Box::new(Expression::Integer(22)),
+        operator: BinaryOperator::Multiply,
+        right: Box::new(Expression::Integer(32)),
+    };
+    assert_eq!(
+        expression,
+        Expression::Binary {
+            left: Box::new(Expression::Integer(22)),
+            operator: BinaryOperator::Multiply,
+            right: Box::new(Expression::Integer(32)),
+        }
+    );
+}
+#[test]
+fn creates_binary_divide_expression() {
+    let expression = Expression::Binary {
+        left: Box::new(Expression::Integer(22)),
+        operator: BinaryOperator::Divide,
+        right: Box::new(Expression::Integer(32)),
+    };
+    assert_eq!(
+        expression,
+        Expression::Binary {
+            left: Box::new(Expression::Integer(22)),
+            operator: BinaryOperator::Divide,
+            right: Box::new(Expression::Integer(32)),
         }
     );
 }

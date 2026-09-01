@@ -305,3 +305,14 @@ fn skips_comment() {
 
     assert_eq!(lexer.next_token(), Ok(TokenKind::Eof));
 }
+#[test]
+fn lexes_parentheses() {
+    let mut lexer = Lexer::new("(22 + 10)");
+
+    assert_eq!(lexer.next_token(), Ok(TokenKind::LeftParen));
+    assert_eq!(lexer.next_token(), Ok(TokenKind::Integer(22)));
+    assert_eq!(lexer.next_token(), Ok(TokenKind::Plus));
+    assert_eq!(lexer.next_token(), Ok(TokenKind::Integer(10)));
+    assert_eq!(lexer.next_token(), Ok(TokenKind::RightParen));
+    assert_eq!(lexer.next_token(), Ok(TokenKind::Eof));
+}
